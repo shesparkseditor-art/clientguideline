@@ -187,32 +187,6 @@
     let welcomeIntervalId = null;
     let autoPlayIntervalId = null;
 
-    // Local Multi-Tab Sync Fallback via BroadcastChannel
-    let syncChannel;
-    try {
-        syncChannel = new BroadcastChannel('agency_realtime_sync_v6');
-        syncChannel.onmessage = (event) => {
-            if (event.data && event.data.type === 'UPDATE_CLIENTS') {
-                state.clients = event.data.clients;
-                if (state.activeClientId && !state.clients.some(c => c.id === state.activeClientId)) {
-                    state.activeClientId = state.clients.length > 0 ? state.clients[0].id : null;
-                }
-                renderApp();
-            }
-        };
-    } catch (e) {
-        console.warn("BroadcastChannel not supported in this sandbox context.");
-    }
-
-    function broadcastClientsUpdate() {
-        if (syncChannel && !isFirebaseOnline) {
-            syncChannel.postMessage({
-                type: 'UPDATE_CLIENTS',
-                clients: state.clients
-            });
-        }
-    }
-
     function startWelcomeOrbitAnimation() {
         if (welcomeIntervalId) clearInterval(welcomeIntervalId);
         welcomeIntervalId = setInterval(() => {
@@ -579,31 +553,6 @@
         startWelcomeOrbitAnimation();
         startGlobalAutoplayLoop();
 
-        // Check if platform has supplied custom Firebase credentials
-        if (typeof __firebase_config !== 'undefined') {
-            try {
-                const config = JSON.parse(__firebase_config);
-                app = initializeApp(config);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                isFirebaseOnline = true;
-            } catch (err) {
-                console.warn("Could not bind custom Firebase. Utilizing fallback config.");
-            }
-        }
-
-        // Falling back to standard config if needed
-        if (!isFirebaseOnline) {
-            try {
-                app = initializeApp(fallbackConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                isFirebaseOnline = true;
-            } catch (err) {
-                isFirebaseOnline = false;
-            }
-        }
-
         if (isFirebaseOnline && auth && db) {
             try {
                 let userCredential;
@@ -614,8 +563,6 @@
                 }
                 
                 const firebaseUser = userCredential.user;
-                
-                // Seed data to Firestore if completely empty
                 const seedDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'metadata', 'seeded');
                 const seedSnap = await getDoc(seedDocRef);
                 
@@ -627,7 +574,6 @@
                     await setDoc(seedDocRef, { seededAt: new Date().toISOString() });
                 }
 
-                // Attach active snapshot listeners for real-time cloud data push
                 const clientsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
                 onSnapshot(clientsCollection, (snapshot) => {
                     const loadedClients = [];
@@ -654,7 +600,6 @@
         renderApp();
     }
 
-    // Helper to sanitize files if memory is exceeded
     function stripLargeBase64(clients) {
         if (!clients) return [];
         try {
@@ -706,7 +651,6 @@
                 }
             }
         }
-        broadcastClientsUpdate();
     }
 
     window.onload = function() {
@@ -1854,7 +1798,7 @@
                             <div class="mt-1.5 flex items-center gap-2">
                                 <span class="text-xs text-slate-400 font-semibold">Editor:</span>
                                 ${canEdit ? `
-                                    <select onchange="updateClientField('assignedEditor', this.value)" class="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-700 dark:text-brand-300 px-3 py-1 focus:ring-2 focus:ring-brand-200">
+                                    <select onchange="updateClientField('assignedEditor', this.value)" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-700 dark:text-brand-300 px-3 py-1 focus:ring-2 focus:ring-brand-200">
                                         <option value="Dina" ${activeClient.assignedEditor === 'Dina' ? 'selected' : ''}>Dina</option>
                                         <option value="Nopi" ${activeClient.assignedEditor === 'Nopi' ? 'selected' : ''}>Nopi</option>
                                         <option value="Diva" ${activeClient.assignedEditor === 'Diva' ? 'selected' : ''}>Diva</option>
